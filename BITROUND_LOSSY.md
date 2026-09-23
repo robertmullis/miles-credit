@@ -5,9 +5,13 @@ saved against the accuracy lost.
 
 ```bash
 module load conda
-conda activate credit-derecho
-cd /glade/work/mullis/miles-credit
+conda activate <your-credit-env>   # the env holding your editable install of this repo
+cd <your-clone-of-miles-credit>
 ```
+
+Every `credit submit` below passes `--conda-env "$CONDA_PREFIX"`, which overrides the
+`pbs:` block in the config so the job runs in the env you just activated. Without it the
+job uses whatever env the config names, which may be another user's.
 
 ## 1. Create the configs
 
@@ -25,7 +29,7 @@ python create_lossy_config.py -k <keepbits>    # fixed mantissa bits, e.g. -k 6
 | `-k`, `--keepbits` | fixed bits, used when no tolerance is given | 4 |
 | `-ne`, `--num_epochs` | epochs per job | 10 |
 | `-e`, `--epochs` | total epochs | 30 |
-| `-tc`, `--template` | config to copy from | `/glade/work/mullis/miles-credit/camulator_configs/lossy/my_camulator_lossy_tol_05.yml` |
+| `-tc`, `--template` | config to copy from | `camulator_configs/lossy/my_camulator_lossy_tol_05.yml` |
 
 `-t 5` produces `my_camulator_lossy_tol_05.yml` and `my_camulator_lossy_tol_05_eval.yml`.
 Without `-t`, the tag is `<k>bits` and the config sets `tolerance: null`.
@@ -34,7 +38,7 @@ Without `-t`, the tag is `<k>bits` and the config sets `tolerance: null`.
 
 ```bash
 credit submit --cluster derecho -c camulator_configs/lossy/my_camulator_lossy_tol_05.yml \
-    --gpus 4 --nodes 4 --walltime 07:00:00 --dry-run
+    --conda-env "$CONDA_PREFIX" --gpus 4 --nodes 4 --walltime 07:00:00 --dry-run
 ```
 
 Drop `--dry-run` to submit. Jobs are chained with `afterok` based on `epochs / num_epoch`.
@@ -51,7 +55,7 @@ Runs live in `/glade/derecho/scratch/$USER/miles-credit/CREDIT_runs/`.
 
 ## 4. Run the evaluation
 
-The eval config has no bitround preblock, a learning rate of 0 and one training batch,
+The eval config has no bitround preblock, a learning rate of 0, and one training batch,
 so the job only scores 400 validation batches. Copy the trained weights into its
 `save_loc` first.
 
@@ -61,7 +65,7 @@ mkdir -p $R/camulator_lossy_tol_05_eval
 cp $R/camulator_lossy_tol_05/checkpoint.pt $R/camulator_lossy_tol_05_eval/
 
 credit submit --cluster derecho -c camulator_configs/lossy/my_camulator_lossy_tol_05_eval.yml \
-    --gpus 1 --walltime 01:00:00
+    --conda-env "$CONDA_PREFIX" --gpus 1 --walltime 01:00:00
 ```
 
 Each evaluation needs its own directory. An eval writes a single epoch-0 row, so
@@ -97,7 +101,10 @@ losslessly compressed and bitrounded sizes in GB/yr. No trained model needed.
   `unknown preblock type 'bitround_transform'`.
 - `tolerance` is a required argument, so a config that doesn't use it must still set
   `tolerance: null`.
-- `keepbits` is a required argument. Lossy runs with a `tolerance` > 0 still use keepbits 
-   in the case that tolerance can not be applied to a variable.
+- `keepbits` is a required argument too. Runs with a tolerance still fall back to it for
+  any variable the tolerance cannot be derived for.
+- The template's `pbs:` block names a specific user's conda env and scratch directory.
+  `--conda-env "$CONDA_PREFIX"` overrides the env; `create_lossy_config.py` rewrites
+  `save_loc` with `$USER`. Check both if a job writes somewhere unexpected.
 - Validation loss measures single-step error only. Use `credit rollout` to see whether
   the rounding error compounds over a forecast.
