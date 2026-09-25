@@ -57,7 +57,8 @@ def main():
     ap.add_argument("--vars", nargs="+", default=None, help="variable short names e.g. PRECT T")
     ap.add_argument("--ymin", type=float, default=None, help="minimum y of plot (default: auto)")
     ap.add_argument("--ymax", type=float, default=1, help="maximum y of plot (default: %(default)s)")
-    ap.add_argument("--total", action="store_true", help="plot the total r2score")
+    ap.add_argument("--total", action="store_true", help="plot the training total (r2 or loss)")
+    ap.add_argument("--loss", action="store_true", help="plot total loss (must use --total)")
     ap.add_argument("-o", "--out", default=None)
     args = ap.parse_args()
 
@@ -77,16 +78,27 @@ def main():
             seen[e] = r
     rows = [seen[k] for k in sorted(seen)]
 
+    if args.loss and not args.total:
+        sys.exit("can not use --loss without --total")
+
     # --total: plot the split's overall r2 per epoch
     if args.total:
         if args.vars:
             sys.exit("can not use --total and --vars together")
-        col = f"{args.split}_{METRIC}"
-        pts = [(val(r,"epoch"), val(r,col)) for r in rows]
-        pts = [(e,v) for e, v in pts if e is not None and v is not None]
-        if not pts:
-            sys.exit(f"no '{col}' column in {args.log}")
-        data = {"total": pts}
+        if args.loss:
+            col = f"{args.split}_loss"
+            pts = [(val(r,"epoch"), val(r,col)) for r in rows]
+            pts = [(e,v) for e, v in pts if e is not None and v is not None]
+            if not pts:
+                sys.exit(f"no '{col}' column in {args.log}")
+            data = {"total": pts}
+        else:
+            col = f"{args.split}_{METRIC}"
+            pts = [(val(r,"epoch"), val(r,col)) for r in rows]
+            pts = [(e,v) for e, v in pts if e is not None and v is not None]
+            if not pts:
+                sys.exit(f"no '{col}' column in {args.log}")
+            data = {"total": pts}
 
     # save 'data' as a dictionary of each variable and its corresponding r2 points
     else:
@@ -112,7 +124,7 @@ def main():
 
     if args.ymin is not None:
         ax.set_ylim(bottom=args.ymin)
-    if args.ymax is not None:
+    if args.ymax is not None and not args.loss:
         ax.set_ylim(top=args.ymax)
     ax.set_xlabel("epoch")
     ax.set_ylabel(f"{args.split}_{METRIC}")
