@@ -51,7 +51,8 @@ python sort_log.py <run>/training_log.csv              # one epoch's metrics, so
 python plot_log.py <run>/training_log.csv --split valid  # r2 per epoch, saved as PNG
 ```
 
-Runs live in `/glade/derecho/scratch/$USER/miles-credit/CREDIT_runs/`.
+Runs live in `/glade/derecho/scratch/$USER/miles-credit/CREDIT_runs/`. Plots are saved to
+`/glade/work/$USER/miles-credit/camulator-plots/{split}-plots`.
 
 ## 4. Run the evaluation
 
@@ -84,6 +85,31 @@ This prints GB/yr, loss, and r2 for the rounded run beside the baseline, plus th
 change in each. The baseline defaults to the gen2 eval log; pass `-b` for a different one,
 and `-bc` with it to compare two rounded configs against each other.
 
+## 6. Submit forecast runs
+
+```bash
+qsub rollout24.pbs
+```
+
+This submits 72 30-day forecasts — 24 monthly initializations for each of the 3 configs —
+covering 2013-01-01 to 2014-12-01. Creates
+`/glade/derecho/scratch/$USER/miles-credit/forecasts` to store the NetCDF forecast files.
+
+## 7. Plot forecast comparisons
+
+```bash
+python plot_rollout_compare.py                    # all variables
+python plot_rollout_compare.py -v TS PRECT FSUS   # subset
+python plot_rollout_compare.py -rf                # rescore, ignoring the cache
+```
+
+This creates a grid of plots displaying the NRMSE vs Forecast Time (h) of each config
+listed in the `RUNS` dict at the top of the script. Each config is scored by calculating
+the RMSE of every variable at each initialization and storing it alongside the source
+data's standard deviation for that variable. Scores are saved to
+`/glade/derecho/scratch/$USER/miles-credit/forecasts/scores` and the plot is saved to
+`/glade/work/$USER/miles-credit/camulator-plots/rollout-plots`.
+
 ## Storage estimate on its own
 
 ```bash
@@ -108,3 +134,5 @@ losslessly compressed and bitrounded sizes in GB/yr. No trained model needed.
   `save_loc` with `$USER`. Check both if a job writes somewhere unexpected.
 - Validation loss measures single-step error only. Use `credit rollout` to see whether
   the rounding error compounds over a forecast.
+- Scores are cached per config in `forecasts/scores/`. Rerunning the rollouts does not
+  invalidate the cache — pass `-rf` after any change to the forecast files.
