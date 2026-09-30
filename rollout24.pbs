@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -A P93300606
+#PBS -N rollout10
+#PBS -l walltime=03:00:00
+#PBS -l select=1:ncpus=8:ngpus=1:mem=64GB
+#PBS -q main@desched1
+#PBS -j oe
+#PBS -k eod
+#PBS -r n
+
+module load ncarenv/24.12 
+module load gcc
+module load conda
+conda activate /glade/work/$USER/conda-envs/credit-derecho
+
+ROOT=/glade/work/$USER/miles-credit
+FDIR=/glade/derecho/scratch/$USER/miles-credit/forecasts
+cd $ROOT
+
+for cfg in gen2/my_camulator_gen2_rollout \
+           lossy/my_camulator_lossy_tol_02_rollout \
+           lossy/my_camulator_lossy_tol_05_rollout; do
+  tag=$(basename $cfg)
+    for init in 2013-{01..12}-01T00 2014-{01..12}-01T00; do
+        echo "=== $tag $init"
+        python $ROOT/credit/applications/rollout_gen2.py \
+        -c $ROOT/camulator_configs/$cfg.yml \
+        --run-mode single --init-time $init --save-dir $FDIR/$tag/$init
+  done
+done
